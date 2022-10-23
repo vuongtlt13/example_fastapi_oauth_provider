@@ -41,7 +41,8 @@ class AuthorizationCodeGrant(grants.AuthorizationCodeGrant):
         await session.commit()
         return auth_code
 
-    async def query_authorization_code(self, code: str, client: OAuthClient, session: AsyncSession) -> Optional[OAuthAuthorizationCode]:
+    async def query_authorization_code(self, code: str, client: OAuthClient, session: AsyncSession) -> Optional[
+        OAuthAuthorizationCode]:
         auth_code = (await session.scalars(select(OAuthAuthorizationCode).filter_by(
             code=code,
             client_id=client.client_id
@@ -53,7 +54,8 @@ class AuthorizationCodeGrant(grants.AuthorizationCodeGrant):
         await session.delete(authorization_code)
         await session.commit()
 
-    async def authenticate_user(self, authorization_code: OAuthAuthorizationCode, session: AsyncSession) -> Optional[User]:
+    async def authenticate_user(self, authorization_code: OAuthAuthorizationCode, session: AsyncSession) -> Optional[
+        User]:
         return (await session.scalars(select(User).filter(User.id == authorization_code.user_id))).first()
 
 
@@ -82,25 +84,25 @@ class RefreshTokenGrant(grants.RefreshTokenGrant):
 query_client = create_query_client_func(OAuthClient)
 save_token = create_save_token_func(OAuthToken)
 require_oauth = ResourceProtector()
+AUTHORIZATION = AuthorizationServer(
+    query_client=query_client,
+    save_token=save_token,
+)
 
 
 def config_oauth(config: OAuthSetting):
-    authorization = AuthorizationServer(
-        config=config,
-        query_client=query_client,
-        save_token=save_token,
-    )
+    AUTHORIZATION.init_app(config)
 
     # support all grants
-    authorization.register_grant(grants.ImplicitGrant)
-    authorization.register_grant(grants.ClientCredentialsGrant)
-    authorization.register_grant(AuthorizationCodeGrant, [CodeChallenge(required=True)])
-    authorization.register_grant(PasswordGrant)
-    authorization.register_grant(RefreshTokenGrant)
+    AUTHORIZATION.register_grant(grants.ImplicitGrant)
+    AUTHORIZATION.register_grant(grants.ClientCredentialsGrant)
+    AUTHORIZATION.register_grant(AuthorizationCodeGrant, [CodeChallenge(required=True)])
+    AUTHORIZATION.register_grant(PasswordGrant)
+    AUTHORIZATION.register_grant(RefreshTokenGrant)
 
     # support revocation
     revocation_cls = create_revocation_endpoint(OAuthToken)
-    authorization.register_endpoint(revocation_cls)
+    AUTHORIZATION.register_endpoint(revocation_cls)
 
     # protect resource
     bearer_cls = create_bearer_token_validator(OAuthToken)

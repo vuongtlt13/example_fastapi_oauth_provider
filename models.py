@@ -31,7 +31,6 @@ class Base:
 class User(Base):
     id = Column(BigInteger, primary_key=True)
     email = Column(String(255), unique=True)
-    password = Column(String(255), nullable=False)
 
     def get_user_id(self):
         return self.id
@@ -41,7 +40,7 @@ class OAuthClient(Base, OAuth2ClientMixin):
     __tablename__ = 'oauth_clients'
 
     id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger, ForeignKey('user.id', ondelete='CASCADE'))
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'))
 
     user = relationship('User')
 
@@ -50,7 +49,7 @@ class OAuthAuthorizationCode(Base, OAuth2AuthorizationCodeMixin):
     __tablename__ = 'oauth_authorization_codes'
 
     id = Column(BigInteger, primary_key=True)
-    user_id = Column(BigInteger, ForeignKey('user.id', ondelete='CASCADE'))
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'))
 
     user = relationship('User')
 
@@ -60,7 +59,7 @@ class OAuthToken(Base, OAuth2TokenMixin):
 
     id = Column(BigInteger, primary_key=True)
     user_id = Column(
-        BigInteger, ForeignKey('user.id', ondelete='CASCADE'))
+        BigInteger, ForeignKey('users.id', ondelete='CASCADE'))
     user = relationship('User')
 
     def is_refresh_token_active(self):
