@@ -124,7 +124,7 @@ test = ["anyio[trio] (>=3.2.1,<4.0.0)", "black (==22.8.0)", "databases[sqlite] (
 
 [[package]]
 name = "fastapi-oauth"
-version = "0.1.2"
+version = "0.1.4"
 description = "OAuth2 Provider in FastAPI"
 category = "main"
 optional = false
@@ -493,7 +493,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "88d4a5c82f01ba6b99689c2567191f3a1225c1bb76e673a2c20f765b58889068"
+content-hash = "fd3aaa43c895730327e7d5c0e27cc8f9d898a3edb646bc63996ef3bd1eb47d28"
 
 [metadata.files]
 aiomysql = [
@@ -619,8 +619,8 @@ fastapi = [
     {file = "fastapi-0.85.1.tar.gz", hash = "sha256:1facd097189682a4ff11cbd01334a992e51b56be663b2bd50c2c09523624f144"},
 ]
 fastapi-oauth = [
-    {file = "fastapi_oauth-0.1.2-py3-none-any.whl", hash = "sha256:02cb73e8c9007fa87c53cff8794cbb0bcddaf8c0c61a29660c899b7ba6b7e668"},
-    {file = "fastapi_oauth-0.1.2.tar.gz", hash = "sha256:f23fd33dac84aa1c12ef63f4e3e8fa75748d06bc911748e620d3ee839b616154"},
+    {file = "fastapi_oauth-0.1.4-py3-none-any.whl", hash = "sha256:81f1f1052fcbeabe47ee3ef941807d37b0b6c8c66a47ab42d2dbe8e082ace55d"},
+    {file = "fastapi_oauth-0.1.4.tar.gz", hash = "sha256:08169f67bf4b63b3646e6cdfa300e9ee5db6c3d1909430d7fa06b8c237ff102d"},
 ]
 fastapi-sso = [
     {file = "fastapi-sso-0.6.3.tar.gz", hash = "sha256:ca3ac83294bdde9af9e4a47fc5c5b258a4593cee5b5f890ece6de9a411f71503"},

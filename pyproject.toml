@@ -16,16 +16,10 @@ alembic = "^1.8.1"
 cryptography = "^38.0.1"
 fastapi-sso = "^0.6.3"
 python-multipart = "^0.0.5"
-fastapi-oauth = "^0.1.3"
+fastapi-oauth = "^0.1.4"
 
 [tool.poetry.dev-dependencies]
 
-
-[[tool.poetry.source]]
-name = "testpypi"
-url = "https://test.pypi.org/simple/"
-default = false
-secondary = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

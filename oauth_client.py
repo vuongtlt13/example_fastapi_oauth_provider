@@ -6,7 +6,9 @@ from typing import Dict, Any
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi_sso.sso.base import OpenID
+from starlette import status
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 app = FastAPI()
@@ -34,11 +36,17 @@ SSOProvider = create_provider(
 )
 
 sso = SSOProvider(
-    client_id="F3aZSAzr9xdBLN6lFuDaTVya",
-    client_secret="zxom2go7xZWEpgq5TQqDEekEJj0AqXGt48HNVPKkq2mlOj0a",
+    client_id="KD83JYxypJNP6ZMXV9soKG1c",
+    client_secret="8BHNKvkb47e0hXKCdnuFWhMnGy8pyezJUulTolx1LY2sP7kM",
     redirect_uri="http://localhost:8000/login/callback",
     allow_insecure_http=True
 )
+
+
+@app.get("/")
+async def sso_login():
+    """Generate login url and redirect"""
+    return RedirectResponse('/login', status.HTTP_302_FOUND)
 
 
 @app.get("/login")

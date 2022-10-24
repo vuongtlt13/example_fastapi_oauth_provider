@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, Body, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi_oauth.base import OAuth2Error
+from fastapi_oauth.common.urls import quote
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -56,6 +57,7 @@ async def home_post(
         user = User(email=username)
         session.add(user)
         await session.commit()
+        await session.refresh(user)
 
     new_session = uuid.uuid4().hex
     SESSIONS[new_session] = user.id
@@ -131,13 +133,15 @@ async def create_client(
 async def authorize(
     *,
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
     request: Request
 ):
     # if user log status is not true (Auth server), then to log it in
     if not current_user:
-        return RedirectResponse(f"/?next={request.url}")
+        return RedirectResponse(f"/?next={quote(str(request.url))}")
     try:
         grant = await AUTHORIZATION.get_consent_grant(
+            session=session,
             end_user=current_user,
             request=request
         )
@@ -157,27 +161,38 @@ async def authorize(
 async def authorize(
     *,
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
     request: Request,
-    confirm: bool = Body()
+    confirm: bool = Form(False)
 ):
     # if user log status is not true (Auth server), then to log it in
     if not current_user:
-        return RedirectResponse(f"/?next={request.url}")
+        return RedirectResponse(f"/?next={quote(str(request.url))}")
     if confirm:
         grant_user = current_user
     else:
         grant_user = None
-    return AUTHORIZATION.create_authorization_response(grant_user=grant_user)
+    return await AUTHORIZATION.create_authorization_response(
+        grant_user=grant_user,
+        session=session,
+        request=request
+    )
 
 
 @router.post('/oauth/token')
-def issue_token():
-    return AUTHORIZATION.create_token_response()
+async def issue_token(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    return await AUTHORIZATION.create_token_response(
+        session=session,
+        request=request
+    )
 
 
 @router.post('/oauth/revoke')
-def revoke_token():
-    return AUTHORIZATION.create_endpoint_response('revocation')
+async def revoke_token():
+    return await AUTHORIZATION.create_endpoint_response('revocation')
 
 
 @router.get('/api/me')

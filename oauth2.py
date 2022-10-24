@@ -9,7 +9,7 @@ from fastapi_oauth import (
     create_bearer_token_validator,
 )
 from fastapi_oauth.provider.setting import OAuthSetting
-from fastapi_oauth.rfc6749 import grants
+from fastapi_oauth.rfc6749 import grants, OAuth2Request
 from fastapi_oauth.rfc7636 import CodeChallenge
 from fastapi import FastAPI, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,9 +25,10 @@ class AuthorizationCodeGrant(grants.AuthorizationCodeGrant):
         'none',
     ]
 
-    async def save_authorization_code(self, code, request: Request, session: AsyncSession) -> OAuthAuthorizationCode:
-        code_challenge = (await request.json()).get('code_challenge')
-        code_challenge_method = (await request.json()).get('code_challenge_method')
+    async def save_authorization_code(self, code, request: OAuth2Request, session: AsyncSession) -> OAuthAuthorizationCode:
+        request_json = request.json
+        code_challenge = request_json.get('code_challenge')
+        code_challenge_method = request_json.get('code_challenge_method')
         auth_code = OAuthAuthorizationCode(
             code=code,
             client_id=request.client.client_id,
@@ -84,7 +85,7 @@ class RefreshTokenGrant(grants.RefreshTokenGrant):
 query_client = create_query_client_func(OAuthClient)
 save_token = create_save_token_func(OAuthToken)
 require_oauth = ResourceProtector()
-AUTHORIZATION = AuthorizationServer(
+AUTHORIZATION: AuthorizationServer = AuthorizationServer(
     query_client=query_client,
     save_token=save_token,
 )
