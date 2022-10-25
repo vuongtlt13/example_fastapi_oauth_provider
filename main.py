@@ -9,7 +9,7 @@ from routes import router
 APP: FastAPI = FastAPI()
 
 APP.include_router(router=router)
-config_oauth(config=SETTING)
+config_oauth(APP, config=SETTING)
 
 
 if __name__ == "__main__":

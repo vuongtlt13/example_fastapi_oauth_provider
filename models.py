@@ -1,11 +1,7 @@
 import time
 from typing import Any
 
-from fastapi_oauth import (
-    OAuth2ClientMixin,
-    OAuth2AuthorizationCodeMixin,
-    OAuth2TokenMixin,
-)
+from fastapi_oauth.rfc6749.models import OAuth2ClientBase, OAuth2TokenBase, OAuth2AuthorizationCodeBase
 from inflection import pluralize, underscore
 from sqlalchemy import BigInteger, String, ForeignKey
 from sqlalchemy import Column
@@ -36,7 +32,7 @@ class User(Base):
         return self.id
 
 
-class OAuthClient(Base, OAuth2ClientMixin):
+class OAuthClient(Base, OAuth2ClientBase):
     __tablename__ = 'oauth_clients'
 
     id = Column(BigInteger, primary_key=True)
@@ -45,7 +41,7 @@ class OAuthClient(Base, OAuth2ClientMixin):
     user = relationship('User')
 
 
-class OAuthAuthorizationCode(Base, OAuth2AuthorizationCodeMixin):
+class OAuthAuthorizationCode(Base, OAuth2AuthorizationCodeBase):
     __tablename__ = 'oauth_authorization_codes'
 
     id = Column(BigInteger, primary_key=True)
@@ -54,7 +50,7 @@ class OAuthAuthorizationCode(Base, OAuth2AuthorizationCodeMixin):
     user = relationship('User')
 
 
-class OAuthToken(Base, OAuth2TokenMixin):
+class OAuthToken(Base, OAuth2TokenBase):
     __tablename__ = 'oauth_token'
 
     id = Column(BigInteger, primary_key=True)

@@ -1,31 +1,41 @@
-from typing import Optional
+import functools
+import logging
+from contextlib import contextmanager
+from typing import Optional, List
 
-from fastapi_oauth import (
-    AuthorizationServer,
-    ResourceProtector,
-    create_query_client_func,
-    create_save_token_func,
-    create_revocation_endpoint,
-    create_bearer_token_validator,
-)
-from fastapi_oauth.provider.setting import OAuthSetting
-from fastapi_oauth.rfc6749 import grants, OAuth2Request
-from fastapi_oauth.rfc7636 import CodeChallenge
-from fastapi import FastAPI, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from fastapi_oauth.common.errors import OAuth2Error
+from fastapi_oauth.common.setting import OAuthSetting
+from fastapi_oauth.rfc6749 import OAuth2Request, ResourceProtector as _ResourceProtector, AuthorizationServer, \
+    MissingAuthorizationError
+from fastapi_oauth.rfc6749.grants import AuthorizationCodeGrant as _AuthorizationCodeGrant, \
+    ResourceOwnerPasswordCredentialsGrant, RefreshTokenGrant as _RefreshTokenGrant, \
+    ImplicitGrant, ClientCredentialsGrant
+from fastapi_oauth.rfc6749.signals import token_authenticated
+from fastapi_oauth.rfc7636.challenge import CodeChallenge
+from fastapi_oauth.utils.functions import create_revocation_endpoint, create_bearer_token_validator
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette import status
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
+from config import SETTING
 from models import User, OAuthClient, OAuthAuthorizationCode, OAuthToken
 
+_logger = logging.getLogger(__name__)
 
-class AuthorizationCodeGrant(grants.AuthorizationCodeGrant):
+
+class AuthorizationCodeGrant(_AuthorizationCodeGrant):
     TOKEN_ENDPOINT_AUTH_METHODS = [
         'client_secret_basic',
         'client_secret_post',
         'none',
     ]
 
-    async def save_authorization_code(self, code, request: OAuth2Request, session: AsyncSession) -> OAuthAuthorizationCode:
+    async def save_authorization_code(self, code, request: OAuth2Request,
+                                      session: AsyncSession) -> OAuthAuthorizationCode:
         request_json = request.json
         code_challenge = request_json.get('code_challenge')
         code_challenge_method = request_json.get('code_challenge_method')
@@ -60,14 +70,14 @@ class AuthorizationCodeGrant(grants.AuthorizationCodeGrant):
         return (await session.scalars(select(User).filter(User.id == authorization_code.user_id))).first()
 
 
-class PasswordGrant(grants.ResourceOwnerPasswordCredentialsGrant):
+class PasswordGrant(ResourceOwnerPasswordCredentialsGrant):
     async def authenticate_user(self, username: str, password: str, session: AsyncSession) -> Optional[User]:
         user = (await session.scalars(select(User).filter(email=username))).first()
         if user is not None and user.check_password(password):
             return user
 
 
-class RefreshTokenGrant(grants.RefreshTokenGrant):
+class RefreshTokenGrant(_RefreshTokenGrant):
     async def authenticate_refresh_token(self, refresh_token, session: AsyncSession) -> Optional[OAuthToken]:
         token = (await session.scalars(select(OAuthToken).filter(refresh_token=refresh_token))).first()
         if token and token.is_refresh_token_active():
@@ -82,21 +92,113 @@ class RefreshTokenGrant(grants.RefreshTokenGrant):
         await session.commit()
 
 
-query_client = create_query_client_func(OAuthClient)
-save_token = create_save_token_func(OAuthToken)
-require_oauth = ResourceProtector()
+class ResourceProtector(_ResourceProtector):
+
+    async def acquire_token(self, request: Request, session: AsyncSession, scopes: List[str] = None):
+        """A method to acquire current valid token with the given scope.
+
+        :param session: Async SQLAlchemy session
+        :param request: Starlette Request instance
+        :param scopes: a list of scope values
+        :return: token object
+        """
+        token = await self.validate_request(scopes, request, session)
+        token_authenticated.send(self, token=token)
+        return token
+
+    @contextmanager
+    def acquire(self, request: Request, session: AsyncSession, scopes: List[str] = None):
+        """The with statement of ``require_oauth``. Instead of using a
+        decorator, you can use a with statement instead::
+
+            @app.route('/api/user')
+            def user_api():
+                with require_oauth.acquire('profile') as token:
+                    user = User.query.get(token.user_id)
+                    return jsonify(user.to_dict())
+        """
+        try:
+            yield self.acquire_token(scopes=scopes, request=request, session=session)
+        except OAuth2Error:
+            raise
+
+    def require_scope(self, scopes=None, optional=False):
+        def wrapper(f):
+            @functools.wraps(f)
+            def decorated(*args, **kwargs):
+                # find request object
+                request = None
+                session = None
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                    elif isinstance(arg, AsyncSession):
+                        session = arg
+
+                for _, v in kwargs.items():
+                    if isinstance(v, Request):
+                        request = v
+                    elif isinstance(v, AsyncSession):
+                        session = v
+
+                if request is None:
+                    _logger.error("You must add `request` argument in your function!")
+                    raise OAuth2Error(
+                        description="You must add `request` argument in your function!",
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+
+                if session is None:
+                    _logger.error("You must add `session` argument in your function!")
+                    raise OAuth2Error(
+                        description="You must add `session` argument in your function!",
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+
+                try:
+                    self.acquire_token(scopes=scopes, request=request, session=session)
+                except MissingAuthorizationError:
+                    if optional:
+                        return f(*args, **kwargs)
+                    raise
+                except OAuth2Error:
+                    raise
+                return f(*args, **kwargs)
+
+            return decorated
+
+        return wrapper
+
+
+resource_protector = ResourceProtector()
+require_scope = resource_protector.require_scope
 AUTHORIZATION: AuthorizationServer = AuthorizationServer(
-    query_client=query_client,
-    save_token=save_token,
+    config=SETTING,
+    oauth_client_model_cls=OAuthClient,
+    oauth_token_model_cls=OAuthToken,
 )
 
 
-def config_oauth(config: OAuthSetting):
+def config_oauth(app: FastAPI, config: OAuthSetting):
+    @app.exception_handler(OAuth2Error)
+    async def oauth2_exception_handler(_: Request, exc: OAuth2Error):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=jsonable_encoder({
+                "message": exc.description,
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": exc.error
+                }
+            }),
+        )
+
     AUTHORIZATION.init_app(config)
 
     # support all grants
-    AUTHORIZATION.register_grant(grants.ImplicitGrant)
-    AUTHORIZATION.register_grant(grants.ClientCredentialsGrant)
+    AUTHORIZATION.register_grant(ImplicitGrant)
+    AUTHORIZATION.register_grant(ClientCredentialsGrant)
     AUTHORIZATION.register_grant(AuthorizationCodeGrant, [CodeChallenge(required=True)])
     AUTHORIZATION.register_grant(PasswordGrant)
     AUTHORIZATION.register_grant(RefreshTokenGrant)
@@ -107,4 +209,4 @@ def config_oauth(config: OAuthSetting):
 
     # protect resource
     bearer_cls = create_bearer_token_validator(OAuthToken)
-    require_oauth.register_token_validator(bearer_cls())
+    resource_protector.register_token_validator(bearer_cls())

@@ -1,6 +1,7 @@
 """This is an example usage of fastapi-sso.
 """
 import os
+import traceback
 from typing import Dict, Any
 
 import uvicorn
@@ -36,8 +37,8 @@ SSOProvider = create_provider(
 )
 
 sso = SSOProvider(
-    client_id="KD83JYxypJNP6ZMXV9soKG1c",
-    client_secret="8BHNKvkb47e0hXKCdnuFWhMnGy8pyezJUulTolx1LY2sP7kM",
+    client_id="F3aZSAzr9xdBLN6lFuDaTVya",
+    client_secret="zxom2go7xZWEpgq5TQqDEekEJj0AqXGt48HNVPKkq2mlOj0a",
     redirect_uri="http://localhost:8000/login/callback",
     allow_insecure_http=True
 )
@@ -58,7 +59,12 @@ async def sso_login():
 @app.get("/login/callback")
 async def sso_callback(request: Request):
     """Process login response from OIDC and return user info"""
-    user = await sso.verify_and_process(request)
+    try:
+        user = await sso.verify_and_process(request)
+    except:
+        traceback.print_exc()
+        user = None
+
     if user is None:
         raise HTTPException(401, "Failed to fetch user information")
     return {

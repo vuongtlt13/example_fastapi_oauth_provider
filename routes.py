@@ -1,10 +1,10 @@
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, Body, Request, Form
+from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
-from fastapi_oauth.base import OAuth2Error
 from fastapi_oauth.common.urls import quote
+from oauthlib.oauth2 import OAuth2Error
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
@@ -12,7 +12,7 @@ from werkzeug.security import gen_salt
 
 from dep import get_current_user, get_session, extract_session_in_request
 from models import User, OAuthClient
-from oauth2 import AUTHORIZATION, require_oauth
+from oauth2 import AUTHORIZATION, require_scope
 from schema import CreateClientRequest
 from session import SESSIONS, SESSION_KEY
 from template import TEMPLATE
@@ -191,13 +191,18 @@ async def issue_token(
 
 
 @router.post('/oauth/revoke')
-async def revoke_token():
-    return await AUTHORIZATION.create_endpoint_response('revocation')
+async def revoke_token(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    return await AUTHORIZATION.create_endpoint_response('revocation', request, session)
 
 
 @router.get('/api/me')
-@require_oauth('profile')
+@require_scope('profile')  # TODO: lay dependent tu token khong phai session
 def api_me(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     return dict(

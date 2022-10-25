@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from fastapi_oauth.provider.setting import OAuthSetting
+from fastapi_oauth.common.setting import OAuthSetting
 from pydantic import AnyUrl, validator
 
 
