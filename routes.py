@@ -1,8 +1,10 @@
 import time
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
+from fastapi_oauth.common.context import OAuthContext
 from fastapi_oauth.common.urls import quote
 from oauthlib.oauth2 import OAuth2Error
 from sqlalchemy import select
@@ -132,26 +134,21 @@ async def create_client(
 @router.get('/oauth/authorize')
 async def authorize(
     *,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context()),
     request: Request
 ):
     # if user log status is not true (Auth server), then to log it in
-    if not current_user:
+    if not context.user_from_session:
         return RedirectResponse(f"/?next={quote(str(request.url))}")
     try:
-        grant = await AUTHORIZATION.get_consent_grant(
-            session=session,
-            end_user=current_user,
-            request=request
-        )
+        grant = await AUTHORIZATION.get_consent_grant(context=context)
     except OAuth2Error as error:
         return error.error
     return TEMPLATE.TemplateResponse(
         name='authorize.html.jinja2',
         context=dict(
             request=request,
-            user=current_user,
+            user=context.user_from_session,
             grant=grant
         )
     )
@@ -160,34 +157,29 @@ async def authorize(
 @router.post('/oauth/authorize')
 async def authorize(
     *,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
     request: Request,
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context()),
     confirm: bool = Form(False)
 ):
     # if user log status is not true (Auth server), then to log it in
-    if not current_user:
+    if not context.user_from_session:
         return RedirectResponse(f"/?next={quote(str(request.url))}")
+
+    grant_user = None
     if confirm:
-        grant_user = current_user
-    else:
-        grant_user = None
+        grant_user = context.user_from_session
+
     return await AUTHORIZATION.create_authorization_response(
-        grant_user=grant_user,
-        session=session,
-        request=request
+        context=context,
+        grant_user=grant_user
     )
 
 
 @router.post('/oauth/token')
 async def issue_token(
-    request: Request,
-    session: AsyncSession = Depends(get_session),
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context()),
 ):
-    return await AUTHORIZATION.create_token_response(
-        session=session,
-        request=request
-    )
+    return await AUTHORIZATION.create_token_response(context=context)
 
 
 @router.post('/oauth/revoke')
@@ -200,12 +192,8 @@ async def revoke_token(
 
 @router.get('/api/me')
 @require_scope('profile')  # TODO: lay dependent tu token khong phai session
-def api_me(
-    request: Request,
-    session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+async def api_me(
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context())
 ):
-    return dict(
-        id=current_user.id,
-        username=current_user.username
-    )
+    user: Optional[User] = context.user_from_token
+    return user

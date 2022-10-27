@@ -1,6 +1,7 @@
 import time
 from typing import Any
 
+from fastapi_oauth.rfc6749.mixins import UserMixin
 from fastapi_oauth.rfc6749.models import OAuth2ClientBase, OAuth2TokenBase, OAuth2AuthorizationCodeBase
 from inflection import pluralize, underscore
 from sqlalchemy import BigInteger, String, ForeignKey
@@ -24,7 +25,7 @@ class Base:
         return underscore(pluralize(self.__name__))
 
 
-class User(Base):
+class User(Base, UserMixin):
     id = Column(BigInteger, primary_key=True)
     email = Column(String(255), unique=True)
 

@@ -26,7 +26,10 @@ discovery = {
 def convert_openid(response: Dict[str, Any]) -> OpenID:
     """Convert user information returned by OIDC"""
     print(response)
-    return OpenID(display_name=response["username"])
+    return OpenID(
+        id=response['id'],
+        display_name=response["email"]
+    )
 
 
 SSOProvider = create_provider(
@@ -37,8 +40,8 @@ SSOProvider = create_provider(
 )
 
 sso = SSOProvider(
-    client_id="F3aZSAzr9xdBLN6lFuDaTVya",
-    client_secret="zxom2go7xZWEpgq5TQqDEekEJj0AqXGt48HNVPKkq2mlOj0a",
+    client_id="KD83JYxypJNP6ZMXV9soKG1c",
+    client_secret="8BHNKvkb47e0hXKCdnuFWhMnGy8pyezJUulTolx1LY2sP7kM",
     redirect_uri="http://localhost:8000/login/callback",
     allow_insecure_http=True
 )

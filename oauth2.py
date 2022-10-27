@@ -5,10 +5,11 @@ from typing import Optional, List
 
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
+from fastapi_oauth.common.types import ContextDependency
 from fastapi_oauth.common.errors import OAuth2Error
 from fastapi_oauth.common.setting import OAuthSetting
 from fastapi_oauth.rfc6749 import OAuth2Request, ResourceProtector as _ResourceProtector, AuthorizationServer, \
-    MissingAuthorizationError
+    MissingAuthorizationError, ResourceProtector
 from fastapi_oauth.rfc6749.grants import AuthorizationCodeGrant as _AuthorizationCodeGrant, \
     ResourceOwnerPasswordCredentialsGrant, RefreshTokenGrant as _RefreshTokenGrant, \
     ImplicitGrant, ClientCredentialsGrant
@@ -22,6 +23,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from config import SETTING
+from dep import get_session, get_current_user
 from models import User, OAuthClient, OAuthAuthorizationCode, OAuthToken
 
 _logger = logging.getLogger(__name__)
@@ -92,88 +94,14 @@ class RefreshTokenGrant(_RefreshTokenGrant):
         await session.commit()
 
 
-class ResourceProtector(_ResourceProtector):
-
-    async def acquire_token(self, request: Request, session: AsyncSession, scopes: List[str] = None):
-        """A method to acquire current valid token with the given scope.
-
-        :param session: Async SQLAlchemy session
-        :param request: Starlette Request instance
-        :param scopes: a list of scope values
-        :return: token object
-        """
-        token = await self.validate_request(scopes, request, session)
-        token_authenticated.send(self, token=token)
-        return token
-
-    @contextmanager
-    def acquire(self, request: Request, session: AsyncSession, scopes: List[str] = None):
-        """The with statement of ``require_oauth``. Instead of using a
-        decorator, you can use a with statement instead::
-
-            @app.route('/api/user')
-            def user_api():
-                with require_oauth.acquire('profile') as token:
-                    user = User.query.get(token.user_id)
-                    return jsonify(user.to_dict())
-        """
-        try:
-            yield self.acquire_token(scopes=scopes, request=request, session=session)
-        except OAuth2Error:
-            raise
-
-    def require_scope(self, scopes=None, optional=False):
-        def wrapper(f):
-            @functools.wraps(f)
-            def decorated(*args, **kwargs):
-                # find request object
-                request = None
-                session = None
-                for arg in args:
-                    if isinstance(arg, Request):
-                        request = arg
-                    elif isinstance(arg, AsyncSession):
-                        session = arg
-
-                for _, v in kwargs.items():
-                    if isinstance(v, Request):
-                        request = v
-                    elif isinstance(v, AsyncSession):
-                        session = v
-
-                if request is None:
-                    _logger.error("You must add `request` argument in your function!")
-                    raise OAuth2Error(
-                        description="You must add `request` argument in your function!",
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-
-                if session is None:
-                    _logger.error("You must add `session` argument in your function!")
-                    raise OAuth2Error(
-                        description="You must add `session` argument in your function!",
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    )
-
-                try:
-                    self.acquire_token(scopes=scopes, request=request, session=session)
-                except MissingAuthorizationError:
-                    if optional:
-                        return f(*args, **kwargs)
-                    raise
-                except OAuth2Error:
-                    raise
-                return f(*args, **kwargs)
-
-            return decorated
-
-        return wrapper
-
-
 resource_protector = ResourceProtector()
 require_scope = resource_protector.require_scope
 AUTHORIZATION: AuthorizationServer = AuthorizationServer(
-    config=SETTING,
+    context_dependency=ContextDependency(
+        get_db_session=get_session,
+        get_user_from_session=get_current_user,
+        get_user_from_token=get_current_user,
+    ),
     oauth_client_model_cls=OAuthClient,
     oauth_token_model_cls=OAuthToken,
 )
@@ -208,5 +136,5 @@ def config_oauth(app: FastAPI, config: OAuthSetting):
     AUTHORIZATION.register_endpoint(revocation_cls)
 
     # protect resource
-    bearer_cls = create_bearer_token_validator(OAuthToken)
+    bearer_cls = create_bearer_token_validator(OAuthToken, User)
     resource_protector.register_token_validator(bearer_cls())

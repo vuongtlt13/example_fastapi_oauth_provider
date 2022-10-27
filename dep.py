@@ -22,6 +22,5 @@ async def extract_session_in_request(
 async def get_current_user(
     session_id: str = Depends(extract_session_in_request),
     session: AsyncSession = Depends(get_session),
-
 ) -> Optional[User]:
     return await get_user_from_session(session_id, session)
