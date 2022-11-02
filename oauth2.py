@@ -1,28 +1,23 @@
-import functools
 import logging
-from contextlib import contextmanager
-from typing import Optional, List
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.encoders import jsonable_encoder
-from fastapi_oauth.common.types import ContextDependency
 from fastapi_oauth.common.errors import OAuth2Error
 from fastapi_oauth.common.setting import OAuthSetting
-from fastapi_oauth.rfc6749 import OAuth2Request, ResourceProtector as _ResourceProtector, AuthorizationServer, \
-    MissingAuthorizationError, ResourceProtector
+from fastapi_oauth.common.types import ContextDependency
+from fastapi_oauth.rfc6749 import OAuth2Request, AuthorizationServer, \
+    ResourceProtector
 from fastapi_oauth.rfc6749.grants import AuthorizationCodeGrant as _AuthorizationCodeGrant, \
     ResourceOwnerPasswordCredentialsGrant, RefreshTokenGrant as _RefreshTokenGrant, \
     ImplicitGrant, ClientCredentialsGrant
-from fastapi_oauth.rfc6749.signals import token_authenticated
 from fastapi_oauth.rfc7636.challenge import CodeChallenge
 from fastapi_oauth.utils.functions import create_revocation_endpoint, create_bearer_token_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from config import SETTING
 from dep import get_session, get_current_user
 from models import User, OAuthClient, OAuthAuthorizationCode, OAuthToken
 
@@ -127,7 +122,7 @@ def config_oauth(app: FastAPI, config: OAuthSetting):
     # support all grants
     AUTHORIZATION.register_grant(ImplicitGrant)
     AUTHORIZATION.register_grant(ClientCredentialsGrant)
-    AUTHORIZATION.register_grant(AuthorizationCodeGrant, [CodeChallenge(required=True)])
+    AUTHORIZATION.register_grant(AuthorizationCodeGrant, [CodeChallenge()])
     AUTHORIZATION.register_grant(PasswordGrant)
     AUTHORIZATION.register_grant(RefreshTokenGrant)
 

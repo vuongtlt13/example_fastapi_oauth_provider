@@ -134,7 +134,7 @@ async def create_client(
 @router.get('/oauth/authorize')
 async def authorize(
     *,
-    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context()),
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context),
     request: Request
 ):
     # if user log status is not true (Auth server), then to log it in
@@ -158,7 +158,7 @@ async def authorize(
 async def authorize(
     *,
     request: Request,
-    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context()),
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context),
     confirm: bool = Form(False)
 ):
     # if user log status is not true (Auth server), then to log it in
@@ -177,23 +177,22 @@ async def authorize(
 
 @router.post('/oauth/token')
 async def issue_token(
-    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context()),
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context),
 ):
     return await AUTHORIZATION.create_token_response(context=context)
 
 
 @router.post('/oauth/revoke')
 async def revoke_token(
-    request: Request,
-    session: AsyncSession = Depends(get_session),
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context)
 ):
-    return await AUTHORIZATION.create_endpoint_response('revocation', request, session)
+    return await AUTHORIZATION.create_endpoint_response('revocation', context=context)
 
 
 @router.get('/api/me')
 @require_scope('profile')  # TODO: lay dependent tu token khong phai session
 async def api_me(
-    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context())
+    context: OAuthContext = Depends(AUTHORIZATION.get_oauth_context)
 ):
     user: Optional[User] = context.user_from_token
     return user
